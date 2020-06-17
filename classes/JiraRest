@@ -2,47 +2,101 @@ VERSION 1.0 CLASS
 BEGIN
   MultiUse = -1  'True
 END
-Attribute VB_Name = "Calendar"
+Attribute VB_Name = "JiraRest"
 Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = True
+'
+' https://community.atlassian.com/t5/Jira-questions/Excel-VBA-gt-JIRA-REST-API/qaq-p/513605
+'
+'
+Private JiraService As Object
+Private JiraAuth As Object
 
+Private sJIRAUserID As String
+Private sJIRAPass As String
+Private sURL As String
+Private sCookie As String
 
+Public Property Let UserName(ByVal vNewValue As String)
+    sJIRAUserID = vNewValue
+End Property
+Public Property Let Password(ByVal vNewValue As String)
+    sJIRAPass = vNewValue
+End Property
+Public Property Let URL(ByVal vNewValue As String)
+    sURL = vNewValue
+End Property
 
-Public Function CreateCalendarEvent(CalendarName As String, Subject As String, EventDate As String, Location As String)
- 
-    Dim myRequiredAttendee, myOptionalAttendee, myResourceAttendee As Outlook.Recipient
-    Dim fldCalendar As Outlook.MAPIFolder
-    Dim Ns As Outlook.NameSpace
-    Dim myItem As Outlook.AppointmentItem
-
-    Set Ns = Application.GetNamespace("MAPI")
-    Set fldCalendar = Ns.GetDefaultFolder(olFolderCalendar).Folders(CalendarName)
+Public Function Login() As Boolean
     
-    Set myItem = fldCalendar.Items.Add(olAppointmentItem)
-         With myItem
-         .MeetingStatus = olEvent
-         .Subject = Subject
-         .Location = Location
-         .AllDayEvent = True
-         .Start = EventDate
-         .ReminderSet = alse
-         .Save
-        End With
+    Set JiraAuth = CreateObject("MSXML2.XMLHTTP")
+    Login = False
+
+    With JiraAuth
+        .Open "POST", sURL & "/rest/auth/1/session", False
+        .setRequestHeader "Content-Type", "application/json"
+        .setRequestHeader "Accept", "application/json"
+        .setRequestHeader "User-Agent", "dummy-value"
+
+
+        .Send " {""username"" : """ & sJIRAUserID & """, ""password"" : """ & sJIRAPass & """}"" '*** HTTP-Request senden"
+
+        If .Status = "200" Then
+            sCookie = "JSESSIONID=" & Mid(sErg, 42, 32) & "; Path=/" & sPfad
+            Login = True
+        End If
+
+    End With
+
 End Function
 
 
-Public Function CalendarEvents(CalendarName As String) As Object
+Public Function DoSomething(sJIRAID As String) As Boolean
 
-    Dim myRequiredAttendee, myOptionalAttendee, myResourceAttendee As Outlook.Recipient
-    Dim fldCalendar As Outlook.MAPIFolder
-    Dim Ns As Outlook.NameSpace
-
-    Set Ns = Application.GetNamespace("MAPI")
-    Set fldCalendar = Ns.GetDefaultFolder(olFolderCalendar).Folders(CalendarName)
-    
-    Set CalendarEvents = fldCalendar.Items
+'*** Your Code here
 
 End Function
 
+Public Function JiraVersions() As Object
+
+    'Dim rJiraVersions As Object
+    Dim scriptControl As Object
+    Dim dictionary As Object
+    Dim Selection As String
+    Dim JsonParser As New JsonParser
+       
+
+    Set JiraService = CreateObject("MSXML2.XMLHTTP")
+    Set scriptControl = CreateObject("MSScriptControl.ScriptControl")
+    
+    scriptControl.Language = "JScript"
+
+    With JiraService
+        .Open "GET", sURL & "/rest/api/2/project/TPPEARL/versions", False
+        .setRequestHeader "Content-Type", "application/json"
+        .setRequestHeader "Accept", "application/json"
+        .setRequestHeader "Set-Cookie", sCookie '
+        .Send
+        While JiraService.readyState <> 4
+            DoEvents
+            'Debug.Print objRequest.readyState
+        Wend
+        strResponse = .responsetext
+    End With
+
+
+    Set JiraVersions = JsonParser.ParseJSON(strResponse)
+
+End Function
+
+
+Public Function Logout()
+
+    With JiraAuth
+        .Open "DELETE", sURL & "/rest/auth/1/session", False
+        .Send
+    End With
+
+End Function
